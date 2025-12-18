@@ -68,83 +68,9 @@ export function DashboardSidebar() {
     }
   };
 
-  // ---------------- AUTH-CONTEXT VERSION (DIKOMENTAR)
-  //
-  // let sidebarMenus = [];
-  //
-  // if (role === ROLE.ADMIN)
-  //   sidebarMenus = [
-  //     {
-  //       type: "single",
-  //       name: "Dashboard",
-  //       href: "/dashboard",
-  //       icon: LayoutGrid,
-  //       isActive: pathname === "/dashboard",
-  //     },
-  //     {
-  //       type: "collapsible",
-  //       name: "Management",
-  //       icon: UserRoundCog,
-  //       section: "management",
-  //       isOpen: openSections.management,
-  //       isActive: pathname.startsWith("/dashboard/management"),
-  //       items: [
-  //         {
-  //           name: "User",
-  //           href: "/dashboard/management/user",
-  //           isActive: pathname.startsWith("/dashboard/management/user"),
-  //         },
-  //         {
-  //           name: "Ormawa",
-  //           href: "/dashboard/management/ormawa",
-  //           isActive: pathname.startsWith(
-  //             "/dashboard/management/organisasi"
-  //           ),
-  //         },
-  //         {
-  //           name: "Event",
-  //           href: "/dashboard/management/event",
-  //           isActive: pathname.startsWith("/dashboard/management/post"),
-  //         },
-  //       ],
-  //     },
-  //   ];
-  //
-  // if (role === ROLE.ORGANIZER)
-  //   sidebarMenus = [
-  //     {
-  //       type: "single",
-  //       name: "Dashboard",
-  //       href: "/dashboard",
-  //       icon: LayoutGrid,
-  //       isActive: pathname === "/dashboard",
-  //     },
-  //     {
-  //       type: "collapsible",
-  //       name: "Management",
-  //       icon: UserRoundCog,
-  //       section: "management",
-  //       isOpen: openSections.management,
-  //       isActive: pathname.startsWith("/dashboard/management"),
-  //       items: [
-  //         {
-  //           name: "Ormawa",
-  //           href: "/dashboard/management/ormawa",
-  //           isActive: pathname.startsWith(
-  //             "/dashboard/management/organisasi"
-  //           ),
-  //         },
-  //         {
-  //           name: "Event",
-  //           href: "/dashboard/management/event",
-  //           isActive: pathname.startsWith("/dashboard/management/post"),
-  //         },
-  //       ],
-  //     },
-  //   ];
-  //
-  // ---------------- VERSION TANPA AUTH (DEFAULT UNTUK SEMUA ROLE)
-
+  // ==========================
+  // MENU (DEFAULT UNTUK SEMUA ROLE)
+  // ==========================
   const sidebarMenus = [
     {
       type: "single",
@@ -159,7 +85,7 @@ export function DashboardSidebar() {
       icon: UserRoundCog,
       section: "management",
       isOpen: openSections.management,
-      isActive: pathname.startsWith("/dashboard/management"),
+      isActive: pathname.startsWith("/dashboard/management") || pathname.startsWith("/dashboard/registration"),
       items: [
         {
           name: "User",
@@ -176,6 +102,14 @@ export function DashboardSidebar() {
           href: "/dashboard/management/post",
           isActive: pathname.startsWith("/dashboard/management/post"),
         },
+
+        // ✅ MENU BARU: REGISTRASI
+        {
+          name: "Daftar Registrasi",
+          href: "/dashboard/management/registration",
+          isActive: pathname.startsWith("/dashboard/management/registration"),
+        },
+        
       ],
     },
   ];
@@ -228,6 +162,7 @@ export function DashboardSidebar() {
           />
         </div>
       </SidebarHeader>
+
       <SidebarContent className="px-3 py-2 w-full bg-white">
         <SidebarMenu>
           {sidebarMenus.map((menu) => (
@@ -300,6 +235,7 @@ export function DashboardSidebar() {
                         )}
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
+
                     <CollapsibleContent
                       className={`${
                         open ? "pl-6" : "pl-0"
@@ -341,6 +277,7 @@ export function DashboardSidebar() {
           ))}
         </SidebarMenu>
       </SidebarContent>
+
       <SidebarFooter className="p-3 bg-white">
         <Button
           type="button"

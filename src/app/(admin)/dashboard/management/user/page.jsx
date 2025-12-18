@@ -29,7 +29,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
+// ✅ IMPORTANT: sesuaikan import ini dengan export DashboardHeader kamu
+// Jika DashboardHeader export default -> pakai: import DashboardHeader from ...
+// Jika named export -> pakai: import { DashboardHeader } from ...
 import { DashboardHeader } from "@/components/_shared/header/DashboardHeader";
+
 import api from "@/lib/api";
 
 // ROLE mengikuti backend
@@ -70,8 +75,6 @@ export default function UsersPage() {
 
   // ========================
   // FETCH USERS DARI BACKEND
-  // GET /api/admin/users  -> AuthApiController@manageUsers
-  // response: { success, message, data: { roles, users } }
   // ========================
   async function fetchUsers() {
     try {
@@ -157,10 +160,24 @@ export default function UsersPage() {
   }, [isUserDialogOpen, isEditing, selectedUser]);
 
   // ========================
+  // ✅ FIX: OPEN EDIT
+  // ========================
+  function openEdit(user) {
+    setSelectedUser(user);
+    setIsEditing(true);
+    setIsUserDialogOpen(true);
+  }
+
+  // ========================
+  // ✅ FIX: OPEN DELETE
+  // ========================
+  function handleDelete(user) {
+    setSelectedUser(user);
+    setIsDeleteDialogOpen(true);
+  }
+
+  // ========================
   // SAVE (ADD / EDIT)
-  // Backend:
-  //   POST /api/admin/users      -> adminAddUser
-  //   PUT  /api/admin/users/{id} -> updateUser
   // ========================
   async function handleSaveUser(userData) {
     try {
@@ -168,11 +185,11 @@ export default function UsersPage() {
       setError("");
 
       if (isEditing && selectedUser?.id) {
-        // UPDATE USER
+        // ✅ UPDATE USER
         await api.put(`/api/admin/users/${selectedUser.id}`, {
           name: userData.fullname,
           email: userData.email,
-          role: userData.role,
+          role: userData.role, // kalau backend tidak mengizinkan ubah role, hapus baris ini
         });
       } else {
         // CREATE USER
@@ -225,8 +242,7 @@ export default function UsersPage() {
   }
 
   // ========================
-  // DELETE USER
-  // DELETE /api/admin/users/{id} -> deleteUser
+  // ✅ DELETE USER (CONFIRM)
   // ========================
   async function handleConfirmDelete() {
     if (!selectedUser?.id) return;
@@ -269,7 +285,7 @@ export default function UsersPage() {
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              {/* <div className="flex items-center gap-2">
                 <AddButton
                   onClick={() => {
                     setSelectedUser(null);
@@ -279,7 +295,7 @@ export default function UsersPage() {
                 >
                   Tambah
                 </AddButton>
-              </div>
+              </div> */}
             </div>
           </CardHeader>
 
@@ -297,16 +313,16 @@ export default function UsersPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-[#f7b5b5]">
-                    <TableHead className="text-[#5b1a1a] font-semibold">
+                    <TableHead className="text-[#5b1a1a] font-semibold uppercase tracking-wide py-4">
                       Nama
                     </TableHead>
-                    <TableHead className="text-[#5b1a1a] font-semibold">
+                    <TableHead className="text-[#5b1a1a] font-semibold uppercase tracking-wide py-4">
                       Email
                     </TableHead>
-                    <TableHead className="text-[#5b1a1a] font-semibold">
+                    <TableHead className="text-[#5b1a1a] font-semibold uppercase tracking-wide py-4">
                       Role
                     </TableHead>
-                    <TableHead className="text-right text-[#5b1a1a] font-semibold">
+                    <TableHead className="text-right text-[#5b1a1a] font-semibold uppercase tracking-wide py-4">
                       Aksi
                     </TableHead>
                   </TableRow>
@@ -315,38 +331,50 @@ export default function UsersPage() {
                 <TableBody>
                   {isLoading && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-6">
-                        Loading...
+                      <TableCell
+                        colSpan={4}
+                        className="text-center py-10 text-sm text-[#8c4b4b]"
+                      >
+                        Memuat data user...
                       </TableCell>
                     </TableRow>
                   )}
 
                   {!isLoading &&
-                    currentUsers.map((user, index) => (
+                    currentUsers.map((u, index) => (
                       <TableRow
-                        key={user.id}
-                        className={`${
-                          index % 2 === 0 ? "bg-[#fce5e5]" : "bg-[#fbe1e1]"
-                        } border-t border-[#f3b5b5]`}
+                        key={u.id}
+                        className={`
+                          transition
+                          ${
+                            index % 2 === 0
+                              ? "bg-[#fce5e5]"
+                              : "bg-[#fbe1e1]"
+                          }
+                          hover:bg-[#ffecec]
+                        `}
                       >
-                        <TableCell className="text-[#4b1a1a]">
-                          {user.fullname}
+                        <TableCell className="py-4 text-[#4b1a1a] font-medium">
+                          {u.fullname}
                         </TableCell>
-                        <TableCell className="text-[#4b1a1a]">
-                          {user.email}
+
+                        <TableCell className="py-4 text-[#4b1a1a]">
+                          {u.email}
                         </TableCell>
-                        <TableCell>
+
+                        <TableCell className="py-4">
                           <Badge
                             className={`rounded-full px-3 py-1 text-xs font-semibold text-white ${
-                              user.role === ROLE.ADMIN
+                              u.role === ROLE.ADMIN
                                 ? "bg-[#66c47b]"
                                 : "bg-[#ffb347]"
                             }`}
                           >
-                            {user.role.toUpperCase()}
+                            {u.role.toUpperCase()}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
+
+                        <TableCell className="py-4 text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -361,24 +389,15 @@ export default function UsersPage() {
                               align="end"
                               className="bg-[#ffe5e5] border-[#f3b5b5]"
                             >
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setSelectedUser(user);
-                                  setIsEditing(true);
-                                  setIsUserDialogOpen(true);
-                                }}
-                              >
+                              <DropdownMenuItem onClick={() => openEdit(u)}>
                                 <Pencil className="mr-2 h-4 w-4 text-[#b63636]" />
                                 Edit
                               </DropdownMenuItem>
 
-                              {user.role !== ROLE.ADMIN && (
+                              {u.role !== ROLE.ADMIN && (
                                 <DropdownMenuItem
                                   className="text-destructive"
-                                  onClick={() => {
-                                    setSelectedUser(user);
-                                    setIsDeleteDialogOpen(true);
-                                  }}
+                                  onClick={() => handleDelete(u)}
                                 >
                                   <Trash2 className="mr-2 h-4 w-4" />
                                   Delete
@@ -394,7 +413,7 @@ export default function UsersPage() {
                     <TableRow>
                       <TableCell
                         colSpan={4}
-                        className="py-6 text-center text-sm text-[#8c4b4b]"
+                        className="py-10 text-center text-sm text-[#8c4b4b]"
                       >
                         Tidak ada user yang cocok dengan pencarian.
                       </TableCell>
@@ -463,6 +482,8 @@ export default function UsersPage() {
                     onChange={(e) => setFormRole(e.target.value)}
                     required
                     className="w-full px-3 py-2 border rounded-lg"
+                    // ✅ optional: kalau saat edit role tidak boleh diubah, aktifkan ini:
+                    // disabled={isEditing}
                   >
                     <option value="">Pilih role</option>
                     {roles.map((r) => (
