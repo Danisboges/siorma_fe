@@ -21,7 +21,7 @@ export default function LoginPage() {
     setError("");
 
     if (!identifier.trim() || !password.trim()) {
-      setError("Email dan password wajib diisi.");
+      setError("Email+ dan password wajib diisi.");
       return;
     }
 

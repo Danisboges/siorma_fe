@@ -1,300 +1,408 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { useSearchParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import api from "@/lib/api";
 
-export default function RegistrationPage() {
-  const searchParams = useSearchParams();
+export default function RegistrationFormPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  // ambil postID dari query: /homepage/registration_form?postID=123
+  // Ambil postID dari URL (case-sensitive)
   const postID = useMemo(() => searchParams.get("postID"), [searchParams]);
+  const ormawaID = useMemo(() => searchParams.get("ormawaID"), [searchParams]);
 
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  // =========================
+  // STATE: POST DETAIL
+  // =========================
+  const [post, setPost] = useState(null);
+  const [loadingPost, setLoadingPost] = useState(true);
 
-  // form state (sesuai BE)
-  const [full_name, setFullName] = useState("");
+  // =========================
+  // STATE: FORM (sesuai tabel registrations)
+  // =========================
+  const [fullName, setFullName] = useState("");
   const [nim, setNim] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [organization, setOrganization] = useState("");
-  const [statusMahasiswa, setStatusMahasiswa] = useState(""); // UI saja (tidak dikirim ke BE)
   const [reason, setReason] = useState("");
 
-  // OPTIONAL: prefilling dari user login
-  useEffect(() => {
-    async function prefill() {
-      try {
-        const res = await api.get("/api/me");
-        const u = res.data?.data || res.data;
+  // ✅ NEW: CV FILE
+  const [cvFile, setCvFile] = useState(null);
 
-        // isi otomatis kalau ada
-        if (u?.name && !full_name) setFullName(u.name);
-        if (u?.email && !email) setEmail(u.email);
-      } catch {
-        // kalau gagal, abaikan (user mungkin belum login)
-      }
-    }
-    prefill();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // =========================
+  // UI STATE
+  // =========================
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError("");
-    setSuccessMsg("");
+  function getAuthHeaders() {
+    const token =
+      localStorage.getItem("token") || sessionStorage.getItem("token");
+    if (!token) return null;
+    return { Authorization: `Bearer ${token}` };
+  }
 
-    if (!postID) {
-      setError("postID tidak ditemukan. Silakan kembali dan pilih postingan dari halaman sebelumnya.");
-      return;
-    }
+  // =========================
+  // HELPER: ambil nama Ormawa dari Post
+  // =========================
+  function getOrmawaNameFromPost(p) {
+    const name1 = p?.ormawa?.name;
+    if (name1) return name1;
 
-    // validasi frontend sederhana (backend tetap validasi)
-    if (!full_name.trim() || !nim.trim() || !email.trim() || !phone.trim()) {
-      setError("Mohon lengkapi field wajib (Nama, NIM, Email, Nomor Telepon).");
-      return;
-    }
+    const name2 = p?.ormawa?.nama;
+    if (name2) return name2;
 
-    if (reason.trim().length > 0 && reason.trim().length < 20) {
-      setError("Alasan bergabung minimal 20 karakter (atau kosongkan).");
-      return;
-    }
+    const id = p?.ormawaID ?? p?.ormawa_id ?? p?.ormawaId;
+    if (id) return `Ormawa #${id}`;
 
+    return "";
+  }
+
+  const organizationAuto = useMemo(() => getOrmawaNameFromPost(post), [post]);
+
+  // =========================
+  // FETCH POST DETAIL
+  // GET /api/posts/{postID}
+  // =========================
+  async function fetchPostDetail() {
     try {
-      setSubmitting(true);
+      setLoadingPost(true);
+      setError("");
 
-      const payload = {
-        full_name: full_name.trim(),
-        nim: nim.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        organization: organization.trim() ? organization.trim() : null,
-        reason: reason.trim() ? reason.trim() : null,
-      };
-
-      await api.post(`/api/posts/${postID}/registrations`, payload);
-
-      setSuccessMsg("Pendaftaran berhasil dikirim. Silakan tunggu proses verifikasi.");
-      // reset form (opsional)
-      // setNim(""); setPhone(""); setOrganization(""); setStatusMahasiswa(""); setReason("");
-    } catch (err) {
-      const code = err?.response?.status;
-      const msg =
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        err?.message ||
-        "Terjadi kesalahan.";
-
-      if (code === 401) {
-        setError("Anda belum login / sesi habis. Silakan login terlebih dahulu.");
-      } else if (code === 404) {
-        setError("Event/post tidak ditemukan atau belum dipublish.");
-      } else if (code === 409) {
-        setError("Anda sudah terdaftar pada event ini.");
-      } else if (code === 422) {
-        setError("Validasi gagal. Pastikan data yang diisi sudah benar.");
-      } else {
-        setError(`Gagal mengirim pendaftaran: ${msg}`);
+      if (!postID) {
+        setError("postID tidak ditemukan di URL.");
+        setPost(null);
+        return;
       }
+
+      const res = await api.get(`/api/posts/${postID}`);
+      const data = res.data?.data ?? res.data?.post ?? res.data ?? null;
+      setPost(data);
+    } catch (err) {
+      console.error(err);
+      setError("Gagal memuat detail postingan.");
+      setPost(null);
     } finally {
-      setSubmitting(false);
+      setLoadingPost(false);
     }
   }
 
+  useEffect(() => {
+    fetchPostDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postID]);
+
+  // =========================
+  // SUBMIT REGISTRATION
+  // POST /api/posts/{postID}/registrations
+  // organization otomatis dari post->ormawa
+  // + CV upload multipart
+  // =========================
+  async function handleSubmit(e) {
+    e.preventDefault();
+
+    try {
+      setIsSubmitting(true);
+      setError("");
+      setSuccessMsg("");
+
+      const headers = getAuthHeaders();
+      if (!headers) {
+        setError("Token tidak ditemukan. Silakan login ulang.");
+        return;
+      }
+
+      if (!postID) {
+        setError("postID tidak ditemukan.");
+        return;
+      }
+
+      if (!fullName.trim()) {
+        setError("Nama lengkap wajib diisi.");
+        return;
+      }
+      if (!nim.trim()) {
+        setError("NIM wajib diisi.");
+        return;
+      }
+      if (!email.trim()) {
+        setError("Email wajib diisi.");
+        return;
+      }
+      if (!phone.trim()) {
+        setError("No. Telp wajib diisi.");
+        return;
+      }
+
+      // ✅ Validasi CV (wajib/opsional tinggal kamu pilih)
+      // Kalau CV wajib:
+      if (!cvFile) {
+        setError("CV wajib diupload.");
+        return;
+      }
+
+      // Validasi tipe & ukuran (sesuaikan dengan backend kamu)
+      if (cvFile) {
+        const allowed = [
+          "application/pdf",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ];
+        if (!allowed.includes(cvFile.type)) {
+          setError("Format CV harus PDF/DOC/DOCX.");
+          return;
+        }
+
+        const maxBytes = 2 * 1024 * 1024; // 2MB (samakan dengan rule backend)
+        if (cvFile.size > maxBytes) {
+          setError("Ukuran CV maksimal 2MB.");
+          return;
+        }
+      }
+
+      // ✅ multipart/form-data via FormData
+      const formData = new FormData();
+      formData.append("full_name", fullName);
+      formData.append("nim", nim);
+      formData.append("email", email);
+      formData.append("phone", phone);
+      formData.append("organization", organizationAuto || "");
+      if (reason) formData.append("reason", reason);
+
+      // field name harus sama dengan backend (misal: "cv" atau "cv_file")
+      // Saya pakai "cv" (sesuaikan dengan validation backend yang kamu buat)
+      if (cvFile) formData.append("cv", cvFile);
+
+      await api.post(`/api/posts/${postID}/registrations`, formData, {
+        headers: {
+          ...headers,
+          // penting: axios akan set boundary otomatis,
+          // tapi aman menambahkan ini
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      setSuccessMsg("Pendaftaran berhasil dikirim.");
+      // opsional: reset form
+      // setFullName(""); setNim(""); setEmail(""); setPhone(""); setReason(""); setCvFile(null);
+      // opsional: redirect
+      // router.push("/user/dashboard");
+    } catch (err) {
+      console.error(err);
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Gagal mengirim pendaftaran.";
+      setError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  // =========================
+  // RENDER
+  // =========================
   return (
     <div className="min-h-screen bg-[#F8EDE9]">
-      {/* Navbar */}
-      <header className="w-full bg-white border-b border-[#e5e5e5]">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          {/* Kiri - Logo + Text */}
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 bg-[#A63E35] rounded-xl flex items-center justify-center">
-              <Image
-                src="/Logo.png"
-                alt="Logo SIORMA"
-                width={64}
-                height={64}
-                className="object-contain"
-                priority
-              />
-            </div>
-
-            <div className="leading-tight">
-              <p className="text-[17px] font-semibold text-black">Siorma</p>
-              <p className="text-sm text-gray-500">Sistem Organisasi Mahasiswa</p>
-            </div>
+      {/* HEADER */}
+      <header className="bg-white border-b">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">
+          <Image src="/Logo.png" alt="Logo" width={48} height={48} />
+          <div>
+            <p className="font-bold">SIORMA</p>
+            <p className="text-sm text-gray-500">Sistem Organisasi Mahasiswa</p>
           </div>
-
-          <nav className="flex items-center gap-10 text-[15px] font-medium">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="text-black hover:text-[#A63E35] transition-colors"
-            >
-              Kembali
-            </button>
-          </nav>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 mt-8 mb-6 pb-28">
-        {/* Red Banner */}
-        <div className="w-full bg-red-600 rounded-4xl px-8 py-8 md:px-12 md:py-10">
-          <h1 className="text-white text-3xl md:text-4xl font-bold">
-            Form Pendaftaran Organisasi & Laboratorium
-          </h1>
-
-          <p className="text-white text-base md:text-lg mt-2 leading-relaxed">
-            Isi formulir di bawah ini untuk bergabung dengan organisasi atau laboratorium pilihan Anda
-          </p>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-8 mt-6">
-          {/* pesan */}
-          {error && (
-            <div className="mb-5 p-4 bg-red-50 rounded-xl border border-red-200">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          )}
-
-          {successMsg && (
-            <div className="mb-5 p-4 bg-green-50 rounded-xl border border-green-200">
-              <p className="text-sm text-green-700">{successMsg}</p>
-            </div>
-          )}
-
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Nama Lengkap <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="fullName"
-                name="fullName"
-                value={full_name}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                placeholder="Masukkan nama lengkap Anda"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                NIM <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="nim"
-                name="nim"
-                value={nim}
-                onChange={(e) => setNim(e.target.value)}
-                className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                placeholder="1234567890"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                placeholder="nama@gmail.com"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Nomor Telepon <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="tel"
-                id="phone"
-                name="phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                placeholder="081234567890"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Organisasi/Laboratorium <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="organization"
-                name="organization"
-                value={organization}
-                onChange={(e) => setOrganization(e.target.value)}
-                className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                placeholder="Pilih organisasi atau laboratorium"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Status Mahasiswa <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="status"
-                name="status"
-                value={statusMahasiswa}
-                onChange={(e) => setStatusMahasiswa(e.target.value)}
-                className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                placeholder="Pilih status Anda sebagai mahasiswa"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="reason" className="block text-sm font-semibold text-gray-700 mb-2">
-                Alasan Bergabung <span className="text-[#A63E35]">*</span>
-              </label>
-              <textarea
-                id="reason"
-                name="reason"
-                rows="5"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#A63E35] focus:border-transparent transition-all resize-none"
-                placeholder="Ceritakan alasan Anda ingin bergabung dengan organisasi/laboratorium ini (minimal 20 karakter)"
-              />
-              <p className="mt-1 text-sm text-gray-500">Minimal 20 karakter (boleh kosong)</p>
-            </div>
-
-            <div className="pt-4">
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full bg-linear-to-r from-[#A63E35] to-[#C14D42] text-white font-semibold py-4 px-6 rounded-xl hover:from-[#8B3329] hover:to-[#A63E35] focus:outline-none focus:ring-4 focus:ring-red-300 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {submitting ? "Mengirim..." : "Daftar Sekarang"}
-              </button>
-            </div>
-          </form>
-
-          <div className="mt-6 p-4 bg-blue-50 rounded-xl">
-            <p className="text-sm text-blue-800">
-              <span className="font-semibold">ℹ️ Info:</span> Setelah mendaftar, tim kami akan meninjau aplikasi Anda dan menghubungi melalui email atau WhatsApp dalam 2-3 hari kerja.
-            </p>
+      <main className="max-w-3xl mx-auto px-4 py-8">
+        {loadingPost ? (
+          <div className="bg-white rounded-2xl p-6 shadow-sm border">
+            <p className="text-gray-600">Memuat detail postingan...</p>
           </div>
-        </div>
+        ) : !postID ? (
+          <div className="bg-white rounded-2xl p-6 shadow-sm border">
+            <p className="text-red-600">postID tidak ditemukan di URL.</p>
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="mt-4 px-4 py-2 rounded-lg bg-gray-900 text-white"
+            >
+              Kembali
+            </button>
+          </div>
+        ) : error ? (
+          <div className="bg-white rounded-2xl p-6 shadow-sm border">
+            <p className="text-red-600">{error}</p>
+            <button
+              type="button"
+              onClick={fetchPostDetail}
+              className="mt-4 px-4 py-2 rounded-lg bg-gray-900 text-white"
+            >
+              Coba lagi
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* INFO POST */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border mb-6">
+              <p className="text-sm text-gray-500 mb-1">Pendaftaran untuk:</p>
+              <h1 className="text-xl font-semibold text-gray-900">
+                {post?.title || "-"}
+              </h1>
+              <p className="text-gray-600 mt-2">{post?.description || "-"}</p>
+
+              <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-semibold">
+                Ormawa: {organizationAuto || "-"}
+              </div>
+            </div>
+
+            {/* FORM */}
+            <form
+              onSubmit={handleSubmit}
+              className="bg-white rounded-2xl p-6 shadow-sm border"
+            >
+              <h2 className="text-lg font-semibold mb-4">Form Pendaftaran</h2>
+
+              {successMsg && (
+                <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
+                  {successMsg}
+                </div>
+              )}
+
+              {error && (
+                <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">
+                    Nama Lengkap <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full mt-1 px-4 py-3 rounded-xl border"
+                    placeholder="Masukkan nama lengkap"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">
+                    NIM <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    value={nim}
+                    onChange={(e) => setNim(e.target.value)}
+                    className="w-full mt-1 px-4 py-3 rounded-xl border"
+                    placeholder="Masukkan NIM"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">
+                    Email <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full mt-1 px-4 py-3 rounded-xl border"
+                    placeholder="Masukkan email"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">
+                    No. Telp <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full mt-1 px-4 py-3 rounded-xl border"
+                    placeholder="Masukkan nomor telepon"
+                  />
+                </div>
+
+                {/* Organization/Lab AUTO dari post->ormawa */}
+                <div>
+                  <label className="text-sm font-medium">
+                    Organisasi/Laboratorium{" "}
+                    <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    value={organizationAuto || ""}
+                    disabled
+                    className="w-full mt-1 px-4 py-3 rounded-xl border bg-gray-100 cursor-not-allowed"
+                    placeholder="Pilih organisasi atau laboratorium"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Diambil otomatis dari ormawa yang membuat postingan.
+                  </p>
+                </div>
+
+                {/* ✅ NEW: Upload CV */}
+                <div>
+                  <label className="text-sm font-medium">
+                    Upload CV <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      setCvFile(f);
+                    }}
+                    className="w-full mt-1 px-4 py-3 rounded-xl border bg-white"
+                  />
+                  <div className="mt-1 text-xs text-gray-500">
+                    Format: PDF/DOC/DOCX. Maks 2MB.
+                    {cvFile ? (
+                      <span className="block mt-1 text-gray-700">
+                        File dipilih: <strong>{cvFile.name}</strong>
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Alasan Bergabung</label>
+                  <textarea
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    className="w-full mt-1 px-4 py-3 rounded-xl border"
+                    rows={4}
+                    placeholder="Tulis alasan bergabung (opsional)"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => router.back()}
+                  className="px-4 py-2 rounded-lg border"
+                  disabled={isSubmitting}
+                >
+                  Kembali
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg bg-[#A63E35] text-white"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Mengirim..." : "Kirim Pendaftaran"}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
       </main>
     </div>
   );
