@@ -1,12 +1,27 @@
+import Image from "next/image";
+
 export default function CardPendaftaran({
   tags = [],
   title,
   subtitle,
   deadline,
-  lowongan
+  lowongan,
+  image,
 }) {
   return (
-    <div className="bg-white rounded-2xl p-6 border border-[#e0d6d3] shadow-sm">
+    <div className="bg-white rounded-2xl p-6 border border-[#e0d6d3] shadow-sm flex flex-col h-[620px] md:h-[660px] lg:h-[700px]">
+      {/* IMAGE */}
+      {image ? (
+        <div className="relative w-full aspect-[16/9] mb-4 overflow-hidden rounded-xl border border-[#e0d6d3] bg-gray-100">
+          <Image
+            src={image}
+            alt={title || "Postingan"}
+            fill
+            className="object-contain"
+            sizes="(max-width: 768px) 100vw, 50vw"
+          />
+        </div>
+      ) : null}
 
       {/* TAGS */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -29,27 +44,19 @@ export default function CardPendaftaran({
       </div>
 
       {/* TITLE */}
-      <h3 className="font-semibold text-lg text-[#2d1b18]">
+      <h3 className="font-semibold text-lg text-[#2d1b18] mb-2">
         {title}
       </h3>
 
-      {/* SUBTITLE */}
-      <p className="text-sm text-[#6b4a45] mb-4">
-        {subtitle}
-      </p>
-
-      {/* INFO */}
-      <div className="text-sm mb-5">
-        <p>
-          <span className="font-medium">Deadline:</span> {deadline}
-        </p>
-        <p>
-          <span className="font-medium">Tersedia:</span> {lowongan}
+      {/* DESCRIPTION (format aman + scroll internal) */}
+      <div className="flex-1 overflow-y-auto pr-2 text-sm text-[#6b4a45]">
+        <p className="whitespace-pre-wrap break-words">
+          {subtitle}
         </p>
       </div>
 
       {/* BUTTON */}
-      <button className="bg-[#D54133] w-full py-2 rounded-lg text-white font-semibold hover:bg-[#c23a2d] transition">
+      <button className="bg-[#D54133] w-full py-2 rounded-lg text-white font-semibold hover:bg-[#c23a2d] transition mt-4">
         Daftar sekarang
       </button>
     </div>

@@ -152,7 +152,7 @@ export default function RegistrationFormPage() {
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         ];
         if (!allowed.includes(cvFile.type)) {
-          setError("Format CV harus PDF/DOC/DOCX.");
+          setError("Format CV harus PDF.");
           return;
         }
 
@@ -247,18 +247,22 @@ export default function RegistrationFormPage() {
           </div>
         ) : (
           <>
-            {/* INFO POST */}
+           {/* INFO POST */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border mb-6">
               <p className="text-sm text-gray-500 mb-1">Pendaftaran untuk:</p>
               <h1 className="text-xl font-semibold text-gray-900">
                 {post?.title || "-"}
               </h1>
-              <p className="text-gray-600 mt-2">{post?.description || "-"}</p>
+
+              <div className="text-gray-600 mt-2 whitespace-pre-wrap leading-relaxed">
+                {post?.description || "-"}
+              </div>
 
               <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-semibold">
                 Ormawa: {organizationAuto || "-"}
               </div>
             </div>
+
 
             {/* FORM */}
             <form
@@ -361,7 +365,7 @@ export default function RegistrationFormPage() {
                     className="w-full mt-1 px-4 py-3 rounded-xl border bg-white"
                   />
                   <div className="mt-1 text-xs text-gray-500">
-                    Format: PDF/DOC/DOCX. Maks 2MB.
+                    Format: PDF. Maks 2MB.
                     {cvFile ? (
                       <span className="block mt-1 text-gray-700">
                         File dipilih: <strong>{cvFile.name}</strong>

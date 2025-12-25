@@ -23,13 +23,9 @@ export default function HomePage() {
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState("");
 
-  // UI input (tampilan sama, hanya dikaitkan ke state)
   const [searchTerm, setSearchTerm] = useState("");
   const [category, setCategory] = useState("Semua");
 
-  // =========================
-  // TOKEN HELPERS
-  // =========================
   function getToken() {
     if (typeof window === "undefined") return null;
     return localStorage.getItem("token") || sessionStorage.getItem("token");
@@ -51,9 +47,6 @@ export default function HomePage() {
     sessionStorage.removeItem("user");
   }
 
-  // =========================
-  // FETCH USER LOGIN: GET /api/me
-  // =========================
   useEffect(() => {
     async function fetchUser() {
       try {
@@ -90,11 +83,6 @@ export default function HomePage() {
     fetchUser();
   }, [router]);
 
-  // =========================
-  // FETCH DATA HOMEPAGE
-  // - Posts: GET /api/posts
-  // - Ormawa: GET /api/ormawa
-  // =========================
   useEffect(() => {
     async function fetchHomeData() {
       try {
@@ -115,12 +103,10 @@ export default function HomePage() {
           api.get("/api/ormawa"),
         ]);
 
-        // posts response: { success, message, data: [...] } atau langsung [...]
         const postsBody = postsRes.data;
         const postsData = postsBody?.data ?? postsBody ?? [];
         setPosts(Array.isArray(postsData) ? postsData : []);
 
-        // ormawa response: { success, message, data: [...] } atau langsung [...]
         const ormawaBody = ormawaRes.data;
         const ormawaData = ormawaBody?.data ?? ormawaBody ?? [];
         setOrmawa(Array.isArray(ormawaData) ? ormawaData : []);
@@ -146,26 +132,39 @@ export default function HomePage() {
     fetchHomeData();
   }, [router]);
 
-  // Nama user atau fallback
   const namaUser = user?.name || user?.fullname || "Pengguna";
 
-  // =========================
-  // HELPERS
-  // =========================
   function storageUrl(path) {
     if (!path) return null;
-    return `${API_BASE}/storage/${path}`;
+
+    const s = String(path);
+
+    if (s.startsWith("http://") || s.startsWith("https://")) return s;
+    if (s.startsWith("/storage/")) return `${API_BASE}${s}`;
+    if (s.startsWith("/")) return `${API_BASE}${s}`;
+
+    const cleaned = s.replace(/^public\//, "");
+    return `${API_BASE}/storage/${cleaned}`;
   }
 
-  // Ambil info ormawa untuk post (tanpa ubah backend)
+  function postImageUrl(post) {
+    const url =
+      post?.poster_url ||
+      storageUrl(post?.posterPath) ||
+      storageUrl(post?.poster_path) ||
+      storageUrl(post?.poster) ||
+      storageUrl(post?.image_path) ||
+      storageUrl(post?.image) ||
+      null;
+
+    return url || "/Logo.png";
+  }
+
   function findOrmawaById(ormawaID) {
     const idNum = Number(ormawaID);
     return ormawa.find((o) => Number(o.id) === idNum) || null;
   }
 
-  // =========================
-  // FILTERING ORMAWA (section bawah)
-  // =========================
   const filteredOrmawa = useMemo(() => {
     const t = searchTerm.trim().toLowerCase();
 
@@ -184,9 +183,6 @@ export default function HomePage() {
     });
   }, [ormawa, searchTerm, category]);
 
-  // =========================
-  // FILTERING POSTS (Pendaftaran Tersedia)
-  // =========================
   const filteredPosts = useMemo(() => {
     const t = searchTerm.trim().toLowerCase();
 
@@ -211,7 +207,6 @@ export default function HomePage() {
       .slice(0, 4);
   }, [posts, ormawa, searchTerm, category]);
 
-  // Mapping Post => CardPendaftaran (tanpa ubah UI Card)
   function mapPostToCard(post) {
     const o = findOrmawaById(post.ormawaID);
 
@@ -230,10 +225,8 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#F8EDE9]">
-      {/* Navbar */}
       <header className="w-full bg-white border-b border-[#e5e5e5]">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          {/* Logo + Text */}
           <div className="flex items-center gap-4">
             <div className="h-12 w-12 bg-[#A63E35] rounded-xl flex items-center justify-center">
               <Image
@@ -254,7 +247,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Menu */}
           <nav className="flex items-center gap-10 text-[15px] font-medium">
             <Link
               href="/list-ormawa"
@@ -274,7 +266,6 @@ export default function HomePage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 mt-8 mb-6 pb-28">
-        {/* Red Banner */}
         <div className="w-full bg-red-600 rounded-4xl px-8 py-8 md:px-12 md:py-10">
           <h1 className="text-white text-3xl md:text-4xl font-bold">
             {loadingUser ? "Memuat..." : `Selamat Datang, ${namaUser}!`}
@@ -286,7 +277,6 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Search Bar */}
         <div className="mt-6">
           <div className="w-full bg-white rounded-2xl px-6 py-4 shadow-sm border border-[#ebe3e3] flex items-center gap-3">
             <svg
@@ -314,34 +304,35 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Kategori */}
         <p className="text-[#3f1f1d] font-medium mt-3">Kategori</p>
 
         <div className="w-full grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4 mt-3">
-          {["Semua", "Teknologi", "Sosial", "Seni & Budaya", "Akademik", "Olahraga"].map(
-            (item) => (
-              <button
-                key={item}
-                onClick={() => setCategory(item)}
-                className="w-full px-5 py-2 bg-white rounded-full text-sm font-semibold shadow-sm border border-[#e6e0de] hover:bg-[#f5f0ef] transition text-center"
-              >
-                {item}
-              </button>
-            )
-          )}
+          {[
+            "Semua",
+            "Teknologi",
+            "Sosial",
+            "Seni & Budaya",
+            "Akademik",
+            "Olahraga",
+          ].map((item) => (
+            <button
+              key={item}
+              onClick={() => setCategory(item)}
+              className="w-full px-5 py-2 bg-white rounded-full text-sm font-semibold shadow-sm border border-[#e6e0de] hover:bg-[#f5f0ef] transition text-center"
+            >
+              {item}
+            </button>
+          ))}
         </div>
 
         {error && <p className="text-sm text-red-600 mt-4">{error}</p>}
 
-        {/* Pendaftaran Tersedia */}
         <p className="text-[#3f1f1d] font-medium mt-10 mb-4">
           Pendaftaran Tersedia ({filteredPosts.length})
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {loadingData && (
-            <p className="text-sm text-gray-600">Memuat data...</p>
-          )}
+          {loadingData && <p className="text-sm text-gray-600">Memuat data...</p>}
 
           {!loadingData &&
             filteredPosts.map((post) => {
@@ -356,6 +347,7 @@ export default function HomePage() {
                     subtitle={card.subtitle}
                     deadline={card.deadline}
                     lowongan={card.lowongan}
+                    image={postImageUrl(post)}
                   />
                 </Link>
               );
@@ -368,7 +360,6 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Ormawa */}
         <p className="text-[#3f1f1d] font-medium mt-10 mb-4">Ormawa</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
@@ -376,9 +367,10 @@ export default function HomePage() {
             filteredOrmawa.slice(0, 4).map((o) => (
               <CardOrmawa
                 key={o.id}
+                ormawaId={o.id}
                 title={o.name}
                 tags={[o.type_ormawa, o.category_ormawa]}
-                image={storageUrl(o.photo_path) || "/placeholder.png"}
+                imageUrl={storageUrl(o.photo_path) || "/Logo.png"}
               />
             ))}
 
