@@ -269,7 +269,7 @@ export default function UsersPage() {
     <>
       <DashboardHeader title="Manajemen User" />
       <main className="md:p-5 p-3 bg-[#f5e4e4] min-h-screen md:space-y-5 space-y-3">
-        <Card className="w-full gap-3 bg-[#f9dede] border border-[#f3b5b5]">
+        <Card className="w-full gap-3 bg-[#fbfbfb] border border-[#f3b5b5]">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>

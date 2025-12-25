@@ -194,12 +194,12 @@ export default function LoginPage() {
             <span className="text-gray-800">Ingat Saya</span>
           </label>
 
-          <Link
+          {/* <Link
             href="/auth/forgot-password"
             className="text-red-600 font-semibold hover:underline"
           >
             Lupa Password?
-          </Link>
+          </Link> */}
         </div>
 
         {/* Button */}

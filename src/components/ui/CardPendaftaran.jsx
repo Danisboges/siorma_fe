@@ -38,15 +38,7 @@ export default function CardPendaftaran({
         {subtitle}
       </p>
 
-      {/* INFO */}
-      <div className="text-sm mb-5">
-        <p>
-          <span className="font-medium">Deadline:</span> {deadline}
-        </p>
-        <p>
-          <span className="font-medium">Tersedia:</span> {lowongan}
-        </p>
-      </div>
+      
 
       {/* BUTTON */}
       <button className="bg-[#D54133] w-full py-2 rounded-lg text-white font-semibold hover:bg-[#c23a2d] transition">

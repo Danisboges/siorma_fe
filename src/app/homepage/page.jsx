@@ -376,6 +376,7 @@ export default function HomePage() {
             filteredOrmawa.slice(0, 4).map((o) => (
               <CardOrmawa
                 key={o.id}
+                ormawaId={o.id}
                 title={o.name}
                 tags={[o.type_ormawa, o.category_ormawa]}
                 image={storageUrl(o.photo_path) || "/placeholder.png"}

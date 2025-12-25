@@ -2,19 +2,7 @@
 
 import React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  History,
-  LogOut,
-  X,
-  LayoutGrid,
-  UserRoundCog,
-  FileText,
-  Calculator,
-  Wallet,
-  Menu,
-  ShieldUser,
-  Settings,
-} from "lucide-react";
+import { LogOut, X, LayoutGrid, UserRoundCog, Menu } from "lucide-react";
 
 import {
   Sidebar,
@@ -34,14 +22,12 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
-// import { useAuth } from "@/contexts/authContext";
-// import { ROLE } from "@/utils/constants";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import api from "@/lib/api";
 
 export function DashboardSidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  // const { logout, role } = useAuth();
   const { open, setOpen, toggleSidebar } = useSidebar();
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [openSections, setOpenSections] = React.useState({
@@ -63,13 +49,58 @@ export function DashboardSidebar() {
 
   const handleSetOpen = (value) => {
     setOpen(value);
-    if (!value) {
-      closeAllSections();
+    if (!value) closeAllSections();
+  };
+
+  // ==========================
+  // LOGOUT FUNCTION
+  // ==========================
+  const handleLogout = async () => {
+    try {
+      // Ambil token kalau ada (untuk attempt logout ke backend)
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+
+      if (token) {
+        api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      }
+
+      // OPTIONAL: panggil backend logout kalau route tersedia
+      // Jika route tidak ada / error, tetap lanjut logout FE.
+      try {
+        await api.post("/api/logout");
+      } catch (_) {}
+
+      // Hapus storage
+      localStorage.removeItem("token");
+      sessionStorage.removeItem("token");
+      localStorage.removeItem("user");
+      sessionStorage.removeItem("user");
+
+      // Hapus header axios
+      delete api.defaults.headers.common["Authorization"];
+
+      // Tutup sidebar mobile jika perlu
+      if (isMobile) toggleSidebar();
+
+      // Redirect ke login
+      router.replace("/auth/login");
+      router.refresh();
+    } catch (err) {
+      // fallback tetap bersih-bersih & redirect
+      localStorage.removeItem("token");
+      sessionStorage.removeItem("token");
+      localStorage.removeItem("user");
+      sessionStorage.removeItem("user");
+      delete api.defaults.headers.common["Authorization"];
+
+      router.replace("/auth/login");
+      router.refresh();
     }
   };
 
   // ==========================
-  // MENU (DEFAULT UNTUK SEMUA ROLE)
+  // MENU
   // ==========================
   const sidebarMenus = [
     {
@@ -85,7 +116,9 @@ export function DashboardSidebar() {
       icon: UserRoundCog,
       section: "management",
       isOpen: openSections.management,
-      isActive: pathname.startsWith("/dashboard/management") || pathname.startsWith("/dashboard/registration"),
+      isActive:
+        pathname.startsWith("/dashboard/management") ||
+        pathname.startsWith("/dashboard/registration"),
       items: [
         {
           name: "User",
@@ -93,7 +126,7 @@ export function DashboardSidebar() {
           isActive: pathname.startsWith("/dashboard/management/user"),
         },
         {
-          name: "Organisasi",
+          name: "Ormawa",
           href: "/dashboard/management/organisasi",
           isActive: pathname.startsWith("/dashboard/management/organisasi"),
         },
@@ -102,15 +135,19 @@ export function DashboardSidebar() {
           href: "/dashboard/management/post",
           isActive: pathname.startsWith("/dashboard/management/post"),
         },
-
-        // ✅ MENU BARU: REGISTRASI
         {
-          name: "Daftar Registrasi",
+          name: "List Pendaftar",
           href: "/dashboard/management/registration",
           isActive: pathname.startsWith("/dashboard/management/registration"),
         },
-        
       ],
+    },
+    {
+      type: "single",
+      name: "Home",
+      href: "/homepage",
+      icon: LayoutGrid,
+      isActive: pathname === "/homepage",
     },
   ];
 
@@ -124,11 +161,8 @@ export function DashboardSidebar() {
         >
           <div
             onClick={() => {
-              if (isMobile) {
-                toggleSidebar();
-              } else {
-                handleSetOpen(!open);
-              }
+              if (isMobile) toggleSidebar();
+              else handleSetOpen(!open);
             }}
             className={`flex items-center gap-2 ${!open && "cursor-pointer"}`}
           >
@@ -150,13 +184,11 @@ export function DashboardSidebar() {
               </h2>
             )}
           </div>
+
           <X
             onClick={() => {
-              if (isMobile) {
-                toggleSidebar();
-              } else {
-                handleSetOpen(!open);
-              }
+              if (isMobile) toggleSidebar();
+              else handleSetOpen(!open);
             }}
             className={`cursor-pointer ${!open && "hidden"}`}
           />
@@ -209,7 +241,7 @@ export function DashboardSidebar() {
                           menu.isActive
                             ? "bg-[#F5F5F5] border border-[#D6D6D6]"
                             : "bg-[#FCFCFC] hover:bg-[#F5F5F5]"
-                        }  ${open ? "justify-between" : "justify-center"}`}
+                        } ${open ? "justify-between" : "justify-center"}`}
                         tooltip={menu.name}
                       >
                         <div className="flex items-center">
@@ -281,14 +313,9 @@ export function DashboardSidebar() {
       <SidebarFooter className="p-3 bg-white">
         <Button
           type="button"
-          // onClick={() => logout()} // <- akan diaktifkan lagi kalau authContext sudah dipakai
-          onClick={() => {
-            /* logout(); */
-          }}
+          onClick={handleLogout}
           variant="ghostDestructive"
-          className={`w-full ${
-            open ? "justify-center" : "justify-center"
-          } py-3 cursor-pointer`}
+          className={`w-full ${open ? "justify-center" : "justify-center"} py-3 cursor-pointer`}
           size="md"
         >
           <LogOut className={`${open ? "mr-2" : ""} size-5`} />

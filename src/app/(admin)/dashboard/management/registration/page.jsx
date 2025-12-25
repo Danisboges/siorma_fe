@@ -296,7 +296,7 @@ export default function AdminRegistrationsPage() {
           <div>
             <h2 className="text-2xl font-bold mb-1">Manajemen Registrations</h2>
             <p className="text-red-100 text-sm">
-              Kelola pendaftaran mahasiswa (registrations)
+              Kelola pendaftaran mahasiswa
             </p>
           </div>
         </div>

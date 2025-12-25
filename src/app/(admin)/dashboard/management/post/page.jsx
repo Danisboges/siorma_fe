@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import CardPendaftaran from "@/components/ui/CardPendaftaran";
 import api from "@/lib/api";
 
 export default function ListPostPage() {
@@ -18,10 +17,14 @@ export default function ListPostPage() {
 
   // MODAL
   const [isAddOpen, setIsAddOpen] = useState(false);
+
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingPost, setEditingPost] = useState(null);
+
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deletingPost, setDeletingPost] = useState(null);
 
-  // FORM
+  // FORM (dipakai untuk Add & Edit)
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("draft");
@@ -46,27 +49,11 @@ export default function ListPostPage() {
   }
 
   function getPostID(post) {
-    return post?.postID ?? post?.id;
-  }
-
-  function mapPostToCard(post) {
-    return {
-      tags: [
-        "Post",
-        (post?.status || "draft").toUpperCase(),
-        `OrmawaID: ${post?.ormawaID ?? "-"}`,
-      ],
-      title: post?.title ?? "-",
-      subtitle: post?.description ?? "-",
-      deadline: "-",
-      lowongan: "-",
-    };
+    return post?.postID ?? post?.id ?? null;
   }
 
   // =========================
   // FETCH ORMAWA (untuk admin)
-  // Endpoint: GET /api/admin/ormawa
-  // Response: { data: [{id,name,...}, ...] }
   // =========================
   async function fetchOrmawas(forceOpenModal = false) {
     try {
@@ -82,14 +69,12 @@ export default function ListPostPage() {
 
       setOrmawas(list);
 
-      // set default pilihan (kalau belum ada)
       if (list.length > 0) {
         setSelectedOrmawaID((prev) => prev || String(list[0].id));
       } else {
         setSelectedOrmawaID("");
       }
 
-      // buka modal setelah data siap (opsional)
       if (forceOpenModal) setIsAddOpen(true);
     } catch (err) {
       console.error(err);
@@ -112,7 +97,8 @@ export default function ListPostPage() {
 
       const res = await api.get("/api/admin/posts");
       const data = res.data?.data ?? res.data?.posts ?? res.data ?? [];
-      setPosts(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setPosts(list);
     } catch (err) {
       console.error(err);
       setError("Gagal memuat postingan.");
@@ -130,15 +116,20 @@ export default function ListPostPage() {
   // FILTER
   const filteredPosts = useMemo(() => {
     const t = (searchTerm || "").toLowerCase();
-    return (posts || []).filter(
-      (p) =>
-        (p?.title || "").toLowerCase().includes(t) ||
-        (p?.description || "").toLowerCase().includes(t) ||
-        (p?.status || "").toLowerCase().includes(t)
-    );
+    return (posts || []).filter((p) => {
+      const ttl = (p?.title || "").toLowerCase();
+      const desc = (p?.description || "").toLowerCase();
+      const st = (p?.status || "").toLowerCase();
+      const oid = String(p?.ormawaID ?? "").toLowerCase();
+      return (
+        ttl.includes(t) || desc.includes(t) || st.includes(t) || oid.includes(t)
+      );
+    });
   }, [posts, searchTerm]);
 
+  // =========================
   // DELETE
+  // =========================
   function openDelete(post) {
     setDeletingPost(post);
     setIsDeleteOpen(true);
@@ -151,6 +142,7 @@ export default function ListPostPage() {
       if (!deletingPost) return;
 
       const id = getPostID(deletingPost);
+
       if (!id) {
         setError("ID postingan tidak ditemukan.");
         return;
@@ -167,8 +159,7 @@ export default function ListPostPage() {
   }
 
   // =========================
-  // CREATE POST (sesuai kebutuhan)
-  // kirim: ormawaID, title, description, status, poster(optional)
+  // CREATE POST
   // =========================
   async function handleCreate() {
     try {
@@ -187,17 +178,11 @@ export default function ListPostPage() {
 
       const t = title.trim();
       const d = description.trim();
-      if (!t) {
-        setError("Judul wajib diisi.");
-        return;
-      }
-      if (!d) {
-        setError("Deskripsi wajib diisi.");
-        return;
-      }
+      if (!t) return setError("Judul wajib diisi.");
+      if (!d) return setError("Deskripsi wajib diisi.");
 
       const fd = new FormData();
-      fd.append("ormawaID", ormawaID); // backend validate exists:ormawa,id
+      fd.append("ormawaID", ormawaID);
       fd.append("title", t);
       fd.append("description", d);
       fd.append("status", status);
@@ -213,6 +198,80 @@ export default function ListPostPage() {
     } catch (err) {
       console.error(err);
       setError("Gagal menambah postingan.");
+    }
+  }
+
+  // =========================
+  // EDIT / UPDATE POST
+  // =========================
+  async function openEdit(post) {
+    if (ormawas.length === 0) {
+      await fetchOrmawas(false);
+    }
+
+    setEditingPost(post);
+
+    setTitle(post?.title ?? "");
+    setDescription(post?.description ?? "");
+    setStatus(post?.status ?? "draft");
+    setPosterFile(null);
+
+    const oid = post?.ormawaID ?? "";
+    setSelectedOrmawaID(oid ? String(oid) : "");
+
+    setIsEditOpen(true);
+  }
+
+  function closeEdit() {
+    setIsEditOpen(false);
+    setEditingPost(null);
+    resetForm();
+  }
+
+  async function handleUpdate() {
+    try {
+      setError("");
+
+      if (!applyAuthHeader()) {
+        setError("Token tidak ditemukan. Silakan login ulang.");
+        return;
+      }
+
+      if (!editingPost) return;
+
+      const id = getPostID(editingPost);
+
+      if (!id) {
+        setError("ID postingan tidak ditemukan.");
+        return;
+      }
+
+      const ormawaID = String(selectedOrmawaID || "").trim();
+      if (!ormawaID) return setError("Silakan pilih Ormawa terlebih dahulu.");
+
+      const t = title.trim();
+      const d = description.trim();
+      if (!t) return setError("Judul wajib diisi.");
+      if (!d) return setError("Deskripsi wajib diisi.");
+
+      const fd = new FormData();
+      fd.append("_method", "PUT"); // <-- penting untuk Laravel multipart update
+      fd.append("ormawaID", ormawaID);
+      fd.append("title", t);
+      fd.append("description", d);
+      fd.append("status", status);
+      if (posterFile) fd.append("poster", posterFile);
+
+      // Laravel-friendly: POST + _method=PUT
+      await api.post(`/api/admin/posts/${id}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      await fetchPosts();
+      closeEdit();
+    } catch (err) {
+      console.error(err);
+      setError("Gagal mengupdate postingan.");
     }
   }
 
@@ -234,7 +293,7 @@ export default function ListPostPage() {
             type="button"
             onClick={() => {
               resetForm();
-              fetchOrmawas(true); // ambil ormawa lalu buka modal
+              fetchOrmawas(true);
             }}
             className="bg-[#A63E35] text-white px-4 py-2 rounded-xl"
           >
@@ -250,35 +309,93 @@ export default function ListPostPage() {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Cari postingan..."
-          className="w-full mb-6 px-4 py-3 rounded-xl border"
+          className="w-full mb-6 px-4 py-3 rounded-xl border bg-white"
         />
 
         {error && <p className="text-red-600 mb-4">{error}</p>}
         {isLoading && <p className="text-gray-600">Memuat data...</p>}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {!isLoading &&
-            filteredPosts.map((post) => {
-              const card = mapPostToCard(post);
-              return (
-                <div key={getPostID(post)} className="relative">
-                  <div className="pr-20">
-                    <CardPendaftaran {...card} />
-                  </div>
+        {!isLoading && (
+          <div className="bg-white rounded-2xl border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-gray-700">
+                  <tr className="text-left">
+                    <th className="p-4 w-[24%]">Judul</th>
+                    <th className="p-4 w-[12%]">Status</th>
+                    <th className="p-4 w-[12%]">Ormawa ID</th>
+                    <th className="p-4">Deskripsi</th>
+                    <th className="p-4 w-[14%] text-right">Aksi</th>
+                  </tr>
+                </thead>
 
-                  <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openDelete(post)}
-                      className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-        </div>
+                <tbody>
+                  {filteredPosts.length === 0 ? (
+                    <tr>
+                      <td className="p-4 text-gray-500" colSpan={5}>
+                        Tidak ada postingan yang cocok.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPosts.map((post) => {
+                      const id = getPostID(post);
+                      return (
+                        <tr key={id} className="border-t align-top">
+                          <td className="p-4 font-medium text-gray-900">
+                            {post?.title ?? "-"}
+                          </td>
+
+                          <td className="p-4">
+                            <span
+                              className={[
+                                "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
+                                (post?.status || "draft") === "published"
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-yellow-100 text-yellow-700",
+                              ].join(" ")}
+                            >
+                              {(post?.status || "draft").toUpperCase()}
+                            </span>
+                          </td>
+
+                          <td className="p-4 text-gray-700">
+                            {post?.ormawaID ?? "-"}
+                          </td>
+
+                          <td className="p-4 text-gray-700">
+                            <p className="line-clamp-3">
+                              {post?.description ?? "-"}
+                            </p>
+                          </td>
+
+                          <td className="p-4">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openEdit(post)}
+                                className="px-3 py-1.5 rounded-lg bg-[#A63E35] text-white hover:opacity-90"
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => openDelete(post)}
+                                className="px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* ADD MODAL */}
@@ -371,6 +488,108 @@ export default function ListPostPage() {
                 disabled={ormawas.length === 0}
               >
                 Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MODAL */}
+      {isEditOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl w-full max-w-lg">
+            <p className="text-lg font-semibold mb-1">Edit Postingan</p>
+            <p className="text-sm text-gray-500 mb-4">
+              Perbarui data postingan. (Poster opsional, isi jika ingin
+              mengganti)
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium">Pilih Ormawa</label>
+                <select
+                  value={selectedOrmawaID}
+                  onChange={(e) => setSelectedOrmawaID(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 rounded-lg border"
+                  disabled={ormawas.length === 0}
+                >
+                  <option value="">
+                    {ormawas.length === 0
+                      ? "Tidak ada ormawa tersedia"
+                      : "-- Pilih Ormawa --"}
+                  </option>
+                  {ormawas.map((o) => (
+                    <option key={o.id} value={String(o.id)}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Judul</label>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 rounded-lg border"
+                  placeholder="Masukkan judul"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Deskripsi</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 rounded-lg border"
+                  rows={4}
+                  placeholder="Masukkan deskripsi"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Status</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 rounded-lg border"
+                >
+                  <option value="draft">draft</option>
+                  <option value="published">published</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Poster (opsional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setPosterFile(e.target.files?.[0] || null)}
+                  className="w-full mt-1"
+                />
+                {editingPost?.posterPath && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Poster saat ini tersimpan. Pilih file baru untuk mengganti.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                type="button"
+                onClick={closeEdit}
+                className="px-4 py-2 border rounded-lg"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleUpdate}
+                className="px-4 py-2 bg-[#A63E35] text-white rounded-lg"
+                disabled={ormawas.length === 0}
+              >
+                Simpan Perubahan
               </button>
             </div>
           </div>
