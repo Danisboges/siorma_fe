@@ -142,13 +142,13 @@ export function DashboardSidebar() {
         },
       ],
     },
-    {
-      type: "single",
-      name: "Home",
-      href: "/homepage",
-      icon: LayoutGrid,
-      isActive: pathname === "/homepage",
-    },
+    // {
+    //   type: "single",
+    //   name: "Home",
+    //   href: "/homepage",
+    //   icon: LayoutGrid,
+    //   isActive: pathname === "/homepage",
+    // },
   ];
 
   return (

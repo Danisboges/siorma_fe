@@ -45,7 +45,27 @@ export default function HomePage() {
     sessionStorage.removeItem("token");
     localStorage.removeItem("user");
     sessionStorage.removeItem("user");
+
+    
   }
+  async function handleLogout() {
+    try {
+      const token = getToken();
+      if (token) {
+        applyAuthHeader(token);
+        // Sesuaikan: kalau baseURL axios kamu sudah /api, pakai "/logout"
+        await api.post("/api/logout");
+      }
+    } catch (err) {
+      console.error("Logout error:", err);
+    } finally {
+      clearToken();
+      router.replace("/auth/login");
+    }
+  }
+
+
+
 
   useEffect(() => {
     async function fetchUser() {
@@ -247,21 +267,33 @@ export default function HomePage() {
             </div>
           </div>
 
-          <nav className="flex items-center gap-10 text-[15px] font-medium">
-            <Link
-              href="/list-ormawa"
-              className="text-black hover:text-[#A63E35] transition-colors"
-            >
-              Ormawa
-            </Link>
+                    <div className="flex items-center gap-4">
+            <nav className="flex items-center gap-10 text-[15px] font-medium">
+              <Link
+                href="/list-ormawa"
+                className="text-black hover:text-[#A63E35] transition-colors"
+              >
+                Ormawa
+              </Link>
 
-            <Link
-              href="/list-postingan"
-              className="text-black hover:text-[#A63E35] transition-colors"
+              <Link
+                href="/list-postingan"
+                className="text-black hover:text-[#A63E35] transition-colors"
+              >
+                Post
+              </Link>
+            </nav>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="px-4 py-2 rounded-xl border border-[#A63E35] bg-[#A63E35] text-white text-sm font-semibold hover:bg-[#8f342c] transition-colors"
             >
-              Post
-            </Link>
-          </nav>
+              Logout
+            </button>
+
+          </div>
+
         </div>
       </header>
 

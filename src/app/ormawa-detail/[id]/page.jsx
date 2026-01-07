@@ -6,8 +6,6 @@ import { useParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
 import CardPendaftaran from "@/components/ui/CardPendaftaran";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-
 export default function OrmawaDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -36,6 +34,18 @@ export default function OrmawaDetailPage() {
     return false;
   }
 
+  function getBackendOrigin() {
+    // Anda bisa punya env /api, jadi ambil origin-nya saja
+    const base =
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      "http://127.0.0.1:8000/api";
+
+    const clean = String(base).replace(/\/$/, "");
+    if (clean.endsWith("/api")) return clean.slice(0, -4);
+    return clean;
+  }
+
   function getPostID(post) {
     return post?.postID ?? post?.id ?? null;
   }
@@ -54,57 +64,61 @@ export default function OrmawaDetailPage() {
     };
   }
 
-  async function fetchOrmawaDetail(id) {
+  /**
+   * ✅ ROUTE BARU:
+   * GET /api/user/ormawa/{id}
+   * return success({
+   *   ormawa: {...},
+   *   posts: [...]
+   * })
+   */
+  async function fetchUserOrmawaDetailWithPosts(id) {
     try {
       setIsLoadingOrmawa(true);
-      setErrorOrmawa("");
-
-      const res = await api.get(`/api/ormawa/${encodeURIComponent(String(id))}`);
-      const data = res.data?.data ?? res.data ?? null;
-
-      if (!data) {
-        setOrmawa(null);
-        setErrorOrmawa("Data ormawa tidak ditemukan.");
-        return;
-      }
-
-      setOrmawa(data);
-    } catch (err) {
-      console.error("FETCH ORMAWA DETAIL ERR:", err);
-      setOrmawa(null);
-      setErrorOrmawa(
-        err?.response?.data?.message || "Gagal memuat detail ormawa."
-      );
-    } finally {
-      setIsLoadingOrmawa(false);
-    }
-  }
-
-  async function fetchPostsByOrmawaID(id) {
-    try {
       setIsLoadingPosts(true);
+      setErrorOrmawa("");
       setErrorPosts("");
 
       const ok = applyAuthHeader();
       if (!ok) {
-        // jangan ganggu detail ormawa, hanya set error posts
+        setOrmawa(null);
         setPosts([]);
-        setErrorPosts("Token tidak ditemukan. Silakan login ulang untuk melihat postingan.");
+        setErrorOrmawa("Token tidak ditemukan. Silakan login ulang.");
+        setErrorPosts("Token tidak ditemukan. Silakan login ulang.");
         return;
       }
 
-      const res = await api.get("/api/admin/posts");
-      const data = res.data?.data ?? res.data?.posts ?? res.data ?? [];
-      const list = Array.isArray(data) ? data : [];
-
-      setPosts(list.filter((p) => String(p?.ormawaID) === String(id)));
-    } catch (err) {
-      console.error("FETCH POSTS ERR:", err);
-      setPosts([]);
-      setErrorPosts(
-        err?.response?.data?.message || "Gagal memuat postingan ormawa."
+      const res = await api.get(
+        `/api/user/ormawa/${encodeURIComponent(String(id))}`
       );
+
+      const payload = res.data?.data ?? res.data ?? null;
+
+      const ormawaData = payload?.ormawa ?? null;
+      const postsData = payload?.posts ?? [];
+
+      if (!ormawaData) {
+        setOrmawa(null);
+        setPosts([]);
+        setErrorOrmawa("Data ormawa tidak ditemukan.");
+        return;
+      }
+
+      setOrmawa(ormawaData);
+      setPosts(Array.isArray(postsData) ? postsData : []);
+    } catch (err) {
+      console.error("FETCH USER ORMAWA DETAIL ERR:", err);
+
+      // kalau 403, biasanya token valid tapi role/policy
+      const msg = err?.response?.data?.message;
+
+      setOrmawa(null);
+      setPosts([]);
+
+      setErrorOrmawa(msg || "Gagal memuat detail ormawa.");
+      setErrorPosts(msg || "Gagal memuat postingan ormawa.");
     } finally {
+      setIsLoadingOrmawa(false);
       setIsLoadingPosts(false);
     }
   }
@@ -118,17 +132,37 @@ export default function OrmawaDetailPage() {
       return;
     }
 
-    // optional debug
-    // console.log("ORMAWA DETAIL ID:", ormawaId);
-
-    fetchOrmawaDetail(ormawaId);
-    fetchPostsByOrmawaID(ormawaId);
+    fetchUserOrmawaDetailWithPosts(ormawaId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ormawaId]);
 
   const photoUrl = useMemo(() => {
-    const path = ormawa?.photo_path || ormawa?.photoPath || null; // ✅ jaga-jaga beda nama
-    return path ? `${API_BASE}/storage/${path}` : null;
+    const origin = getBackendOrigin();
+
+    // Backend Anda log: "/storage/ormawa/xxxxx.jpg"
+    const raw =
+      ormawa?.photo_path ??
+      ormawa?.photoPath ??
+      ormawa?.photo_url ??
+      ormawa?.photoUrl ??
+      null;
+
+    if (!raw) return null;
+
+    if (typeof raw === "string" && /^https?:\/\//i.test(raw)) {
+      return raw.replace("/api/storage/", "/storage/");
+    }
+
+    const path = String(raw).startsWith("/") ? String(raw) : `/${raw}`;
+
+    // kalau sudah "/storage/...."
+    if (path.startsWith("/storage/")) return `${origin}${path}`;
+
+    // kalau hanya "ormawa/xxx.jpg" atau "/ormawa/xxx.jpg"
+    if (path.startsWith("/ormawa/")) return `${origin}/storage${path}`;
+
+    // fallback paksa storage
+    return `${origin}/storage${path}`;
   }, [ormawa]);
 
   const loading = isLoadingOrmawa || isLoadingPosts;
@@ -141,7 +175,9 @@ export default function OrmawaDetailPage() {
             <Image src="/Logo.png" alt="SIORMA" width={48} height={48} />
             <div>
               <p className="font-semibold">SIORMA</p>
-              <p className="text-sm text-gray-500">Sistem Organisasi Mahasiswa</p>
+              <p className="text-sm text-gray-500">
+                Sistem Organisasi Mahasiswa
+              </p>
             </div>
           </div>
 
@@ -217,8 +253,7 @@ export default function OrmawaDetailPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {posts.map((post) => {
-                const pid =
-                  getPostID(post) || `${post?.ormawaID}-${post?.title}`;
+                const pid = getPostID(post) || `${post?.ormawaID}-${post?.title}`;
                 return (
                   <div key={pid}>
                     <CardPendaftaran {...mapPostToCard(post)} />

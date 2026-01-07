@@ -52,6 +52,32 @@ export default function ListPostPage() {
     return post?.postID ?? post?.id ?? null;
   }
 
+  function getPosterUrl(post) {
+    const base = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/$/, "");
+
+    const raw =
+      post?.poster_url ??
+      post?.posterUrl ??
+      post?.posterPath ??
+      post?.poster_path ??
+      post?.poster ??
+      post?.posterFile ??
+      null;
+
+    if (!raw) return null;
+
+    if (typeof raw === "string" && /^https?:\/\//i.test(raw)) return raw;
+
+    const str = String(raw);
+    const path = str.startsWith("/") ? str : `/${str}`;
+
+    // Jika BE mengirim sudah /storage/...
+    if (path.startsWith("/storage/")) return `${base}${path}`;
+
+    // Jika BE mengirim mis. posters/abc.jpg atau /posters/abc.jpg
+    return `${base}/storage${path}`;
+  }
+
   // =========================
   // FETCH ORMAWA (untuk admin)
   // =========================
@@ -321,7 +347,8 @@ export default function ListPostPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-700">
                   <tr className="text-left">
-                    <th className="p-4 w-[24%]">Judul</th>
+                    <th className="p-4 w-[12%]">Poster</th>
+                    <th className="p-4 w-[22%]">Judul</th>
                     <th className="p-4 w-[12%]">Status</th>
                     <th className="p-4 w-[12%]">Ormawa ID</th>
                     <th className="p-4">Deskripsi</th>
@@ -332,15 +359,35 @@ export default function ListPostPage() {
                 <tbody>
                   {filteredPosts.length === 0 ? (
                     <tr>
-                      <td className="p-4 text-gray-500" colSpan={5}>
+                      <td className="p-4 text-gray-500" colSpan={6}>
                         Tidak ada postingan yang cocok.
                       </td>
                     </tr>
                   ) : (
                     filteredPosts.map((post) => {
                       const id = getPostID(post);
+                      const posterUrl = getPosterUrl(post);
+
                       return (
                         <tr key={id} className="border-t align-top">
+                          <td className="p-4">
+                            {posterUrl ? (
+                              <div className="relative w-20 h-14 rounded-lg overflow-hidden border bg-gray-50">
+                                <Image
+                                  src={posterUrl}
+                                  alt="Poster"
+                                  fill
+                                  className="object-cover"
+                                  sizes="80px"
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-xs">
+                                No image
+                              </span>
+                            )}
+                          </td>
+
                           <td className="p-4 font-medium text-gray-900">
                             {post?.title ?? "-"}
                           </td>

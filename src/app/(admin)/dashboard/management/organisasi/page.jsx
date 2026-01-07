@@ -59,6 +59,74 @@ export default function ListOrmawaPage() {
     return item?.id ?? item?.ormawaID ?? item?.ormawaId ?? null;
   }
 
+  /**
+   * ✅ PENTING:
+   * Env Anda: NEXT_PUBLIC_API_BASE_URL = http://127.0.0.1:8000/api
+   * Untuk image, Next.config hanya allow /storage/** (tanpa /api),
+   * maka kita ambil ORIGIN-nya saja: http://127.0.0.1:8000
+   */
+  function getBackendOrigin() {
+    const base =
+      process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
+
+    // hilangkan trailing slash
+    const clean = String(base).replace(/\/$/, "");
+
+    // hapus suffix /api kalau ada
+    if (clean.endsWith("/api")) return clean.slice(0, -4);
+
+    return clean;
+  }
+
+  /**
+   * ✅ Sesuai BE Anda (log):
+   * /storage/ormawa/xxxx.jpg
+   *
+   * DAN harus match next.config pathname "/storage/**"
+   */
+  function getOrmawaPhotoUrl(item) {
+    const origin = getBackendOrigin();
+
+    // prioritas field yang biasa dipakai
+    const raw =
+      item?.photo_path ??
+      item?.photoPath ??
+      item?.photo_url ??
+      item?.photoUrl ??
+      item?.photo ??
+      item?.image ??
+      item?.image_url ??
+      null;
+
+    if (!raw) return null;
+
+    // kalau sudah full URL, pastikan tidak mengandung "/api/" untuk storage
+    if (typeof raw === "string" && /^https?:\/\//i.test(raw)) {
+      // normalisasi kalau ternyata URL-nya salah bentuk ".../api/storage/..."
+      return raw.replace("/api/storage/", "/storage/");
+    }
+
+    const path = String(raw).startsWith("/") ? String(raw) : `/${raw}`;
+
+    // kalau backend sudah kirim "/storage/..." tinggal prefix origin
+    if (path.startsWith("/storage/")) return `${origin}${path}`;
+
+    // kalau yang kebawa "/api/storage/..." => normalisasi
+    if (path.startsWith("/api/storage/"))
+      return `${origin}${path.replace("/api/storage/", "/storage/")}`;
+
+    // kalau yang kebawa "/api/ormawa/xxx.jpg" (seperti error Anda),
+    // paksa jadi "/storage/ormawa/xxx.jpg"
+    if (path.startsWith("/api/ormawa/"))
+      return `${origin}${path.replace("/api/ormawa/", "/storage/ormawa/")}`;
+
+    // kalau hanya "ormawa/xxx.jpg"
+    if (path.startsWith("/ormawa/")) return `${origin}/storage${path}`;
+
+    // fallback terakhir: paksa ke /storage
+    return `${origin}/storage${path}`;
+  }
+
   // =====================
   // FETCH DATA
   // =====================
@@ -67,8 +135,6 @@ export default function ListOrmawaPage() {
       setIsLoading(true);
       setError("");
 
-      // kalau endpoint /api/ormawa public, auth header tidak wajib.
-      // tapi aman dipasang kalau ada token.
       applyAuthHeader();
 
       const res = await api.get("/api/ormawa");
@@ -303,6 +369,7 @@ export default function ListOrmawaPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-700">
                   <tr className="text-left">
+                    <th className="p-4 w-[12%]">Foto</th>
                     <th className="p-4 w-[18%]">Nama</th>
                     <th className="p-4 w-[12%]">Tipe</th>
                     <th className="p-4 w-[14%]">Kategori</th>
@@ -315,15 +382,35 @@ export default function ListOrmawaPage() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td className="p-4 text-gray-500" colSpan={6}>
+                      <td className="p-4 text-gray-500" colSpan={7}>
                         Tidak ada ormawa yang cocok.
                       </td>
                     </tr>
                   ) : (
                     filtered.map((o) => {
                       const id = getOrmawaID(o);
+                      const photoUrl = getOrmawaPhotoUrl(o);
+
                       return (
                         <tr key={id} className="border-t align-top">
+                          <td className="p-4">
+                            {photoUrl ? (
+                              <div className="relative w-16 h-16 rounded-lg overflow-hidden border bg-gray-50">
+                                <Image
+                                  src={photoUrl}
+                                  alt="Foto Ormawa"
+                                  fill
+                                  className="object-cover"
+                                  sizes="64px"
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-xs">
+                                No image
+                              </span>
+                            )}
+                          </td>
+
                           <td className="p-4 font-medium text-gray-900">
                             {o?.name ?? "-"}
                           </td>
@@ -528,7 +615,10 @@ export default function ListOrmawaPage() {
                   onChange={(e) => setPhoto(e.target.files?.[0] || null)}
                   className="w-full mt-1"
                 />
-                {editingOrmawa?.photo_path && (
+                {(editingOrmawa?.photo_path ||
+                  editingOrmawa?.photoPath ||
+                  editingOrmawa?.photo_url ||
+                  editingOrmawa?.photoUrl) && (
                   <p className="text-xs text-gray-500 mt-1">
                     Foto saat ini tersimpan. Pilih file baru untuk mengganti.
                   </p>
@@ -568,7 +658,7 @@ export default function ListOrmawaPage() {
                 <label className="text-sm font-medium">Status Oprec</label>
                 <select
                   value={status_oprec}
-                  onChange={(e) => setStatusOprec(e.target.value)}
+                    onChange={(e) => setStatusOprec(e.target.value)}
                   className="w-full mt-1 px-3 py-2 rounded-lg border"
                 >
                   <option value="BUKA">BUKA</option>
